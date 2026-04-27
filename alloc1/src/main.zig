@@ -1,31 +1,30 @@
 const std = @import("std");
 const config = @import("config");
 
-const DebugAllocatorType = std.heap.DebugAllocator(.{                                                                   
-  .stack_trace_frames = 10,                                                                                       
-  .enable_memory_limit = true,                                                                                    
-  .safety = true,                                                                                                 
-  .thread_safe = false,                                                                                           
-  .verbose_log = true,                                                                                            
-  .backing_allocator_zeroes = false,                                                                              
-  .page_size = 1024                                                                                               
-  });
-
-fn createAllocatorStructType(comptime isDebug: bool) type {
+fn createAllocatorType(comptime isDebug: bool) type {
   if (isDebug) {
     return struct {
-      memAllocator: std.mem.Allocator = std.heap.page_allocator,
-      defaultAllocator: std.mem.Allocator = std.heap.page_allocator,
-      debugAllocator: ?DebugAllocatorType = null,
+      const DebugAllocatorType = std.heap.DebugAllocator(.{
+        .stack_trace_frames = 10,
+        .enable_memory_limit = true,
+        .safety = true,
+        .thread_safe = false,
+        .verbose_log = true,
+        .backing_allocator_zeroes = false,
+        .page_size = 1024
+        });
+
+      allocator: std.mem.Allocator,
+      heapDebugAllocator: ?DebugAllocatorType = null,
 
       pub fn init(self: *@This()) void {
-        self.debugAllocator = DebugAllocatorType{.backing_allocator = self.defaultAllocator,};
-        self.debugAllocator.?.requested_memory_limit = 1024;
-        self.memAllocator = self.debugAllocator.?.allocator();
+        self.heapDebugAllocator = DebugAllocatorType{.backing_allocator = std.heap.page_allocator,};
+        self.heapDebugAllocator.?.requested_memory_limit = 1024;
+        self.allocator = self.heapDebugAllocator.?.allocator();
       }
 
       pub fn deinit(self: *@This()) void {
-        const leakStatus = self.debugAllocator.?.deinit();
+        const leakStatus = self.heapDebugAllocator.?.deinit();
         if (leakStatus == .leak) {
           std.debug.panic("{s}\n", .{"memory leaked"});
         }
@@ -33,24 +32,23 @@ fn createAllocatorStructType(comptime isDebug: bool) type {
     };
   } else {
     return struct {
-      buffer: ?[]u8 = null,
-      memAllocator: std.mem.Allocator = std.heap.page_allocator,
-      defaultAllocator: std.mem.Allocator = std.heap.page_allocator,
-      bufferAllocator: ?std.heap.FixedBufferAllocator = null,
+      buffer: ?[]u8,
+      allocator: std.mem.Allocator = std.heap.page_allocator,
+      fixedHeapAllocator: ?std.heap.FixedBufferAllocator = null,
 
       pub fn init(self: *@This()) void {
-        const tmp = self.defaultAllocator.alloc(u8, 1024);
+        const tmp = std.heap.page_allocator.alloc(u8, 1024);
         if (tmp) |ptr| {
           self.buffer = ptr;
-          self.bufferAllocator = std.heap.FixedBufferAllocator.init(ptr);
-          self.memAllocator = self.bufferAllocator.?.allocator();
+          self.fixedHeapAllocator = std.heap.FixedBufferAllocator.init(ptr);
+          self.allocator = self.fixedHeapAllocator.?.allocator();
         } else |err| {
           std.debug.panic("{any}\n", .{err});
         }
       }
 
       pub fn deinit(self: *@This()) void {
-        self.defaultAllocator.free(self.buffer.?);
+        std.heap.page_allocator.free(self.buffer.?);
       }
     };
   }
@@ -79,23 +77,22 @@ fn work2(memAlloc: std.mem.Allocator) !void {
 }
 
 pub fn main(init: std.process.Init) !void {
-  const allocConfigType = createAllocatorStructType(config.debugAlloc);
-  var allocConfig = allocConfigType{};
-  
-  allocConfig.init();
+  const AllocatorType = createAllocatorType(config.debugAlloc);
+  var alloc: AllocatorType = undefined;
+  alloc.init();
 
   const args = try init.minimal.args.toSlice(init.arena.allocator());
   for (args) |arg| {
     if (std.mem.eql(u8, "-work0", arg)) {
-      try work0(allocConfig.memAllocator);
+      try work0(alloc.allocator);
     } else if (std.mem.eql(u8, "-work1", arg)) {
-      try work1(allocConfig.memAllocator);
+      try work1(alloc.allocator);
     } else if (std.mem.eql(u8, "-work2", arg)) {
-      try work2(allocConfig.memAllocator);
+      try work2(alloc.allocator);
     } else {
       std.log.warn("no match\n", .{});
     }
   }
 
-  allocConfig.deinit();
+  alloc.deinit();
 }

@@ -22,11 +22,6 @@ pub fn build(b: *std.Build) void {
     // in this directory.
 
     const buildOptions = .{                                                                                               
-      .log = b.option(                                                                                              
-        bool,                                                                                                       
-        "log",                                                                                                      
-        "stuff"
-      ),
       .debugAllocator = b.option(                                                                                              
         bool,                                                                                                       
         "debugAlloc",                                                                                                      
@@ -98,7 +93,6 @@ pub fn build(b: *std.Build) void {
     });
 
     const exeOptions = b.addOptions();                                                                                    
-    exeOptions.addOption(bool, "log", buildOptions.log orelse false);                                        
     exeOptions.addOption(bool, "debugAlloc", buildOptions.debugAllocator orelse false);                                        
     exe.root_module.addOptions("config", exeOptions);                                                               
 
