@@ -22,20 +22,15 @@ pub fn build(b: *std.Build) void {
     // in this directory.
 
     const buildOptions = .{                                                                                               
-      .log = b.option(                                                                                              
+      .logEnabled = b.option(                                                                                              
         bool,                                                                                                       
         "logEnabled",                                                                                                      
-        "stuff"
+        "enable debug logging"
       ),
-      .logTimestamp = b.option(                                                                                              
-        bool,                                                                                                       
-        "logTimestamp",                                                                                                      
-        "stuff"
-      ),
-      .logLevel = b.option(
-        []const u8,
-        "logLevel",
-        "stuff1"
+      .logStat = b.option(
+        bool,
+        "logStat",
+        "enable stat logging when logEnabled=true"
       ),
     };
 
@@ -103,9 +98,8 @@ pub fn build(b: *std.Build) void {
     });
 
     const exeOptions = b.addOptions();                                                                                    
-    exeOptions.addOption(bool, "logEnabled", buildOptions.log orelse false);                                        
-    exeOptions.addOption(bool, "logTimestamp", buildOptions.logTimestamp orelse false);                                        
-    exeOptions.addOption([]const u8, "logLevel", buildOptions.logLevel orelse "err");
+    exeOptions.addOption(bool, "logEnabled", buildOptions.logEnabled orelse false);
+    exeOptions.addOption(bool, "logStat", buildOptions.logStat orelse false);
     exe.root_module.addOptions("config", exeOptions);                                                               
 
     // This declares intent for the executable to be installed into the
