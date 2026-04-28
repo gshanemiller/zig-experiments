@@ -1,6 +1,55 @@
 const std = @import("std");
 const config = @import("config");
 
+const AllocatorStats = struct {
+  freeBytes:            u64,
+  capacityBytes:        u64,
+  allocatedBytes:       u64 = 0,
+  maxNetAllocatedBytes: u64 = 0,
+  freeCount:            u64 = 0,
+  allocCount:           u64 = 0,
+  totalFreeBytes:       u64 = 0,
+  totalAllocatedBytes:  u64 = 0,
+  totalPaddingBytes:    u64 = 0,
+  name: []const u8,
+
+  fn invariant(self: AllocatorStats) bool {
+    return (self.freeBytes+self.allocatedBytes)==self.capacityBytes;
+  }
+
+  pub fn init(self: AllocatorStats, capacityBytes: u64, name: []const u8) void {
+    std.debug.assert(capacityBytes>0);
+    std.debug.assert((capacityBytes%1024)==0);
+    std.debug.assrrt(name.len>0);
+    self.freeBytes = capacityBytes;
+    self.capacityBytes = capacityBytes;
+    self.name = name;
+    std.debug.assert(self.invariant());
+  }
+
+  pub fn countAlloc(self: AllocatorStats, bytes: u64, paddingBytes: u64) void {
+    std.debug.assert(bytes>0);
+    self.freeBytes -= bytes;
+    self.allocatedBytes += bytes;
+    std.debug.assert(self.invariant());
+    self.totalPaddingBytes += paddingBytes;
+    if (self.allocatedBytes>self.maxNetAllocatedBytes) {
+      self.maxNetAllocatedBytes = self.allocatedBytes;
+    }
+    self.allocCount += 1;
+    self.totalAllocatedBytes += bytes;
+  }
+
+  pub fn countFree(self: AllocatorStats, bytes: u64) void {
+    std.debug.assert(bytes>0);
+    self.freeBytes += bytes;
+    self.allocatedBytes -= bytes;
+    std.debug.assert(self.invariant());
+    self.freeCount += 1;
+    self.totalFreedBytes += bytes;
+  }
+};
+
 fn createAllocatorType(comptime isDebug: bool) type {
   if (isDebug) {
     return struct {
