@@ -1,8 +1,6 @@
 {
-  "Transport": {
-
-    "Primary": {
-
+  "TransportSet": [
+    {
       "HugePageAllocator": [
         {
           "Name": "Allocator1",
@@ -44,11 +42,12 @@
         "ScheduledPriority": [
           20333,
           4294967295
-        ]
+        ],
+        "Allocator": "Allocator1"
       },
 
       "NIC": {
-        "Manufacture": "Mellanonx",
+        "Model": "Mellanonx",
         "Name": "DefaultNic",
         "MACAddress": "0c:42:a1:7e:a3:ed",
         "IPV4Address": "10.23.31.190",
@@ -91,7 +90,7 @@
           },
           "ErrorIPV4Endpoint": {
             "Port": 39221,
-            "VLANId": 1
+            "VLANId": 2
           },
           "CallbackCapacity": 8,
           "ReadyCapacity": 16,
@@ -100,5 +99,5 @@
         }
       ]
     }
-  }
+  ]
 }

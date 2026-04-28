@@ -5,13 +5,46 @@ const TransportConfig = struct {
     return value>0 and (value&(value-1))==0;
   }
 
+  fn addName(name: []const u8, map: *std.hash_map.StringHashMap(bool)) bool {
+    std.debug.assert(name.len>0);
+    var ret = false;
+    if (!map.contains(name)) {
+      if (map.put(name, true)) |result| {
+        _ = result;
+        ret = true;
+      } else |err| {
+        std.log.err("transportConfig map error: {any} on {s}\n", .{err, name});
+      }
+    } else {
+      std.log.err("transportConfig name '{s}' duplicated\n", .{name});
+    }
+    return ret;
+  }
+
   const HugePageAllocator = struct {
     Name: []const u8,
     HugePageCount: u32,
     SizeKB: u32,
 
-    pub fn verify(self: HugePageAllocator) bool {
-      return self.Name.len>0 and self.HugePageCount>0 and self.SizeKB>0;
+    pub fn verify(self: HugePageAllocator, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying hugePageAllocator name '{s}'", .{self.Name});
+
+      // Not used
+      _ = allocator;
+
+      var ret = 
+        self.Name.len>0       and
+        self.HugePageCount>0  and
+        self.SizeKB>0;
+
+      // Add name
+      if (ret) {
+        // Protect against zero length names
+        ret = ret and addName(self.Name, map);
+      }
+
+      // Return result
+      return ret;
     } 
   };
 
@@ -19,9 +52,25 @@ const TransportConfig = struct {
     Name: []const u8,
     SizeKB: u32,
 
-    pub fn verify(self: HeapAllocator) bool {
-      return self.Name.len>0 and self.SizeKB>0;
-    }
+    pub fn verify(self: HeapAllocator, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying heapAllocator name '{s}'", .{self.Name});
+
+      // Not used
+      _ = allocator;
+
+      var ret =
+        self.Name.len>0 and
+        self.SizeKB>0;
+
+      // Add name
+      if (ret) {
+        // Protect against zero length names
+        ret = ret and addName(self.Name, map);
+      }
+
+      // Return result
+      return ret;
+    } 
   };
 
   const SRPT = struct {
@@ -32,8 +81,14 @@ const TransportConfig = struct {
     RequestRingCount: u32,
     UnscheduledPriority: []u32,
     ScheduledPriority: []u32,
+    Allocator: []const u8,
 
-    pub fn verify(self: SRPT) bool {
+    pub fn verify(self: SRPT, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying SRPT name '{s}'", .{self.Name});
+
+      // Not used
+      _ = allocator;
+
       var ret =
         self.Name.len>0                     and
         powerOfTwo(self.Capacity)           and 
@@ -43,31 +98,39 @@ const TransportConfig = struct {
         powerOfTwo(self.RequestRingCount)   and
         self.RequestRingCount>4             and
         self.UnscheduledPriority.len==6     and
-        self.ScheduledPriority.len==2;
+        self.ScheduledPriority.len==2       and
+        self.Allocator.len>0;
 
       // Bail if bad
-      if (ret==false) {
+      if (!ret) {
         return ret;
       }
 
-      // Make sure non-zero in increasing order
+      // Make sure priorities in strict increasing order non-zero
       for (self.UnscheduledPriority, 0..) |value, i| {
         ret = ret and (value>0);
         if (i>0) {
           ret = ret and (value>self.UnscheduledPriority[i-i]);
         }
       }
-
+      // Scheduled priorities must exceed unscheduled priorities
       ret = ret and (self.ScheduledPriority[0]>0);
       ret = ret and (self.ScheduledPriority[1]>self.ScheduledPriority[0]);
       ret = ret and (self.ScheduledPriority[0]>self.UnscheduledPriority[5]);
 
+      // Add name to map
+      ret = ret and addName(self.Name, map);
+
+      // Cross reference names
+      ret = ret and map.contains(self.Allocator);
+
+      // Return result
       return ret;
     }
   };
 
   const NIC = struct {
-    Manufacture: []const u8,
+    Model: []const u8,
     Name: []const u8,
     MACAddress: []const u8,
     IPV4Address: []const u8,
@@ -78,9 +141,14 @@ const TransportConfig = struct {
     SRPTCPUHWcore: u32,
     Allocator: []const u8,
 
-    pub fn verify(self: NIC) bool {
-      return
-        self.Manufacture.len>0    and
+    pub fn verify(self: NIC, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying NIC name '{s}' model '{s}'", .{self.Name, self.Model});
+
+      // Not used
+      _ = allocator;
+
+      var ret = 
+        self.Model.len>0          and
         self.Name.len>0           and
         self.MACAddress.len==17   and
         self.IPV4Address.len>0    and
@@ -93,6 +161,23 @@ const TransportConfig = struct {
         self.SRPTCPUHWcore>=0     and
         self.SRPTCPUHWcore<256    and
         self.Allocator.len>0;
+
+      // Bail if bad
+      if (!ret) {
+        return ret;
+      }
+
+      // Add names
+      ret = ret and addName(self.Name, map);
+      ret = ret and addName(self.MACAddress, map);
+      ret = ret and addName(self.IPV4Address, map);
+      ret = ret and addName(self.PciDeviceId, map);
+
+      // Cross-reference names
+      ret = ret and map.contains(self.Allocator);
+
+      // Return result
+      return ret;
     }
   };
 
@@ -101,12 +186,26 @@ const TransportConfig = struct {
     MempoolName: []const u8,
     RingSize: u32,
 
-    pub fn verify(self: RXQ) bool {
-      return
+    pub fn verify(self: RXQ, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying RXQ name '{s}'", .{self.Name});
+
+      // Not used
+      _ = allocator;
+
+      var ret =
         self.Name.len>0           and
         self.MempoolName.len>0    and
         powerOfTwo(self.RingSize) and
         self.RingSize>4;
+
+      // Add names
+      if (ret) {
+        // Protect against zero length names
+        ret = ret and addName(self.Name, map);
+      }
+
+      // Return result
+      return ret;
     }
   };
 
@@ -115,12 +214,26 @@ const TransportConfig = struct {
     MempoolName: []const u8,
     RingSize: u32,
 
-    pub fn verify(self: TXQ) bool {
-      return
+    pub fn verify(self: TXQ, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying TXQ name '{s}'", .{self.Name});
+
+      // Not used
+      _ = allocator;
+
+      var ret =
         self.Name.len>0           and
         self.MempoolName.len>0    and
         powerOfTwo(self.RingSize) and
         self.RingSize>4;
+
+      // Add names
+      if (ret) {
+        // Protect against zero length names
+        ret = ret and addName(self.Name, map);
+      }
+
+      // Return result
+      return ret;
     }
   };
 
@@ -129,11 +242,24 @@ const TransportConfig = struct {
     TXQName: []const u8,
     NICName: []const u8,
 
-    pub fn verify(self: QueuePair) bool {
-      return
+    pub fn verify(self: QueuePair, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying queuePair rxqName '{s}' txQName '{s}' nicName '{s}'", .{self.RXQName, self.TXQName, self.NICName});
+
+      // Not used
+      _ = allocator;
+
+      var ret =
         self.RXQName.len>0  and
         self.TXQName.len>0  and
         self.NICName.len>0;
+
+      // Cross reference names
+      ret = ret and map.contains(self.RXQName);
+      ret = ret and map.contains(self.TXQName);
+      ret = ret and map.contains(self.NICName);
+
+      // Return result
+      return ret;
     }
   };
 
@@ -141,12 +267,30 @@ const TransportConfig = struct {
     Port: u32,
     VLANId: u32,
 
-    pub fn verify(self: IPV4Endpoint) bool {
-      return
+    pub fn verify(self: IPV4Endpoint, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying endpoint vlanId '{d}' port '{d}'", .{self.VLANId, self.Port});
+
+      var ret =
         self.Port>0       and
         self.Port<65536   and
         self.VLANId>=0    and
-        self.VLANId<2048;
+        self.VLANId<4096;
+
+      // Bail of error
+      if (!ret) {
+        return ret;
+      }
+
+      // Make string for vlan/port pair
+      if (std.fmt.allocPrint(allocator, "IPV4Endpoint:{d}:{d}", .{self.Port, self.VLANId})) |value| {
+        ret = ret and addName(value, map);
+      } else |err| {
+        std.log.err("transportConfig allocation error: {any}\n", .{err});
+        ret = false;
+      }
+
+      // Return result
+      return ret;
     }
   };
 
@@ -161,14 +305,13 @@ const TransportConfig = struct {
     ReserveCapacity: u32,
     Allocator: []const u8,
 
-    pub fn verify(self: TransportItem) bool {
-      return  
+    pub fn verify(self: TransportItem, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying transport item '{s}'", .{self.Name});
+
+      var ret =
         self.Name.len>0                   and
         self.CPUHWcore>=0                 and
         self.CPUHWcore<256                and
-        self.QueuePair.verify()           and
-        self.IPV4Endpoint.verify()        and
-        self.ErrorIPV4Endpoint.verify()   and
         powerOfTwo(self.CallbackCapacity) and
         powerOfTwo(self.ReadyCapacity)    and
         self.ReadyCapacity>=8             and
@@ -177,10 +320,27 @@ const TransportConfig = struct {
         self.ReserveCapacity>=8           and
         self.ReserveCapacity<=256         and
         self.Allocator.len>0;
+
+        // Bail if error
+        if (!ret) {
+          return ret;
+        }
+
+        // Verify fields
+        ret = ret and self.QueuePair.verify(allocator, map);
+        ret = ret and self.IPV4Endpoint.verify(allocator, map);
+        ret = ret and self.ErrorIPV4Endpoint.verify(allocator, map);
+        ret = ret and map.contains(self.Allocator); 
+
+        // Add name
+        ret = ret and addName(self.Name, map);
+
+        // Return result
+        return ret;
     }
   };
 
-  const Primary = struct {
+  const TransportSetItem = struct {
     HugePageAllocator: []HugePageAllocator,
     HeapAllocator: []HeapAllocator,
     SRPT: SRPT,
@@ -189,58 +349,86 @@ const TransportConfig = struct {
     TXQ: []TXQ,
     Transport: []TransportItem,
 
-    pub fn verify(self: Primary) bool {
+    pub fn verify(self: TransportSetItem, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      std.log.debug("verifying transport item set", .{});
+
       var ret = (self.HugePageAllocator.len>0 or self.HeapAllocator.len>0);
       ret = ret and (self.RXQ.len>0 and self.TXQ.len>0 and self.RXQ.len==self.TXQ.len);
       ret = ret and (self.RXQ.len<=1024);
+
+      // Verify fields
       for (self.HugePageAllocator) |item| {
-        ret = ret and item.verify();
+        ret = ret and item.verify(allocator, map);
       }
       for (self.HeapAllocator) |item| {
-        ret = ret and item.verify();
+        ret = ret and item.verify(allocator, map);
       }
-      ret = ret and self.SRPT.verify();
-      ret = ret and self.NIC.verify();
+      for (self.RXQ) |item| {
+        ret = ret and item.verify(allocator, map);
+      }
+      for (self.TXQ) |item| {
+        ret = ret and item.verify(allocator, map);
+      }
+      ret = ret and self.SRPT.verify(allocator, map);
+      ret = ret and self.NIC.verify(allocator, map);
       for (self.Transport) |item| {
-        ret = ret and item.verify();
+        ret = ret and item.verify(allocator, map);
       }
 
+      // Return result
       return ret;
     }
   };
 
-  const TransportRoot = struct {
-    Primary: Primary,
-
-    pub fn verify(self: TransportRoot) bool {
-      return self.Primary.verify();
-    }
-  };
-
   const Root = struct {
-    Transport: TransportRoot,
+    TransportSet: []TransportSetItem,
 
-    pub fn verify(self: Root) bool {
-      return self.Transport.verify();
+    pub fn verify(self: Root, allocator: std.mem.Allocator, map: *std.hash_map.StringHashMap(bool)) bool {
+      var ret = self.TransportSet.len==1;
+      for (self.TransportSet) |item| {
+        ret = ret and item.verify(allocator, map);
+        if (!ret) {
+          break;
+        }
+      }
+      return ret;
     }
   };
 
-  parsed: std.json.Parsed(Root),
+  root: Root,
 
-  pub fn init(self: *@This(), allocator: std.mem.Allocator, io: std.Io) !void {
-    const json = try std.Io.Dir.cwd().readFileAlloc(io, "./transport.json", allocator, .limited(8 * 1024),);
+  pub fn init(self: *@This(), fileName: []const u8, allocator: std.mem.Allocator, io: std.Io) !void {
+    std.log.debug("processing transport configuration '{s}'", .{fileName});
+    const json = try std.Io.Dir.cwd().readFileAlloc(io, fileName, allocator, .limited(8 * 1024),);
     defer allocator.free(json);
-    self.parsed = try std.json.parseFromSlice(Root, allocator, json, .{},);
-    defer self.parsed.deinit();
-    const root = self.parsed.value;
-    // Example usage
-    std.debug.print("First HugePageAllocator: {s}\n",
-        .{root.Transport.Primary.HugePageAllocator[0].Name});
-    std.debug.print("pass basic verify: {}\n", .{root.verify()});
+    const parsed = try std.json.parseFromSlice(Root, allocator, json, .{},);
+    defer parsed.deinit();
+    self.root = parsed.value;
+    std.log.debug("verifying transport configuration '{s}'", .{fileName});
+    var nameMap: std.hash_map.StringHashMap(bool) = .init(allocator);
+    std.debug.print("verify: {}\n", .{self.root.verify(allocator, &nameMap)});
+    // free keys allocated in IPV4Endpoint
+    var moreWork = true;
+    while (moreWork) {
+      moreWork = false;
+      var iter = nameMap.keyIterator();
+      while (iter.next()) |key| {
+        std.log.info("outer: key: {s}", .{key.*});
+        if (std.mem.startsWith(u8, key.*, "IPV4Endpoint:")) {
+          const ptr = key.*;
+          if (nameMap.remove(key.*)) {
+            allocator.free(ptr);
+          }
+          moreWork = true;
+          break;
+        }
+      }
+    }
+    nameMap.clearAndFree();
   }
 };
 
 pub fn main(init: std.process.Init) !void {
   var jsonConfig: TransportConfig = undefined;
-  try jsonConfig.init(init.gpa, init.io);
+  try jsonConfig.init("transport.json", init.gpa, init.io);
 }

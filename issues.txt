@@ -13,3 +13,5 @@ how in the f do you make https://ziglang.org/documentation/0.16.0/std/#std.heap.
    when the field in q is declared in a struct?
 
 wtf is std.heap.DebugAllocator return a type? it takes two steps to get to end-point
+
+wtf a struct must have fields to have functions?
