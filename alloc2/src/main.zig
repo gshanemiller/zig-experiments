@@ -4,175 +4,165 @@ const config = @import("config");
 const AllocatorStats = struct {
   freeBytes:            u64,
   capacityBytes:        u64,
-  allocatedBytes:       u64 = 0,
-  maxNetAllocatedBytes: u64 = 0,
-  freeCount:            u64 = 0,
-  allocCount:           u64 = 0,
-  totalFreeBytes:       u64 = 0,
-  totalAllocatedBytes:  u64 = 0,
-  totalPaddingBytes:    u64 = 0,
+  allocatedBytes:       u64,
+  maxNetAllocatedBytes: u64,
+  freeCount:            u64,
+  allocCount:           u64,
+  totalFreeBytes:       u64,
+  totalAllocatedBytes:  u64,
+  totalPaddingBytes:    u64,
   name: []const u8,
 
   fn invariant(self: AllocatorStats) bool {
     return (self.freeBytes+self.allocatedBytes)==self.capacityBytes;
   }
 
-  pub fn init(self: AllocatorStats, capacityBytes: u64, name: []const u8) void {
+  pub fn init(self: *@This(), capacityBytes: u64, name: []const u8) void {
     std.debug.assert(capacityBytes>0);
     std.debug.assert((capacityBytes%1024)==0);
-    std.debug.assrrt(name.len>0);
+    std.debug.assert(name.len>0);
     self.freeBytes = capacityBytes;
     self.capacityBytes = capacityBytes;
+    self.allocatedBytes = 0;
+    self.maxNetAllocatedBytes = 0;
+    self.freeCount = 0;
+    self.allocCount = 0;
+    self.totalFreeBytes = 0;
+    self.totalAllocatedBytes = 0;
+    self.totalPaddingBytes = 0;
     self.name = name;
     std.debug.assert(self.invariant());
   }
 
-  pub fn countAlloc(self: AllocatorStats, bytes: u64, paddingBytes: u64) void {
+  pub fn countAlloc(self: *@This(), bytes: u64, paddingBytes: u64) void {
     std.debug.assert(bytes>0);
-    self.freeBytes -= bytes;
-    self.allocatedBytes += bytes;
+    self.freeBytes -= (bytes+paddingBytes);
+    self.allocatedBytes += (bytes+paddingBytes);
     std.debug.assert(self.invariant());
     self.totalPaddingBytes += paddingBytes;
     if (self.allocatedBytes>self.maxNetAllocatedBytes) {
       self.maxNetAllocatedBytes = self.allocatedBytes;
     }
     self.allocCount += 1;
-    self.totalAllocatedBytes += bytes;
+    self.totalAllocatedBytes += (bytes+paddingBytes);
   }
 
-  pub fn countFree(self: AllocatorStats, bytes: u64) void {
+  pub fn countFree(self: *@This(), bytes: u64) void {
     std.debug.assert(bytes>0);
     self.freeBytes += bytes;
     self.allocatedBytes -= bytes;
     std.debug.assert(self.invariant());
     self.freeCount += 1;
-    self.totalFreedBytes += bytes;
+    self.totalFreeBytes += bytes;
+  }
+
+  pub fn print(self: *@This()) void {
+    std.log.debug("name                 : {s}", .{self.name});
+    std.log.debug("----------------------------", .{});
+    std.log.debug("freeBytes            : {d}", .{self.freeBytes});
+    std.log.debug("capacityBytes        : {d}", .{self.capacityBytes});
+    std.log.debug("allocatedBytes:      : {d}", .{self.allocatedBytes});
+    std.log.debug("maxNetAllocatedBytes : {d}", .{self.maxNetAllocatedBytes});
+    std.log.debug("freeCount            : {d}", .{self.freeCount});
+    std.log.debug("allocCount:          : {d}", .{self.allocCount});
+    std.log.debug("totalFreeBytes:      : {d}", .{self.totalFreeBytes});
+    std.log.debug("totalAllocatedBytes  : {d}", .{self.totalAllocatedBytes});
+    std.log.debug("totalPaddingBytes    : {d}", .{self.totalPaddingBytes});
   }
 };
 
-const AllocatorInterface = struct {
+const FixedSizeAllocator = struct {
+  memory: []u8,
+  offset: u64,
+  alignment: u64,
+  numa: u8,
   stat: AllocatorStats,
-  parent: std.mem.Allocator,
-
-  pub fn init(self: AllocatorInterface, parent: std.memAllocator, capacityBytes: u64, name: []const u8) void {
-    self.parent = parent;
+  backingAllocator: std.mem.Allocator,
+  
+  pub fn init(self: *@This(), backingAllocator: std.mem.Allocator, capacityBytes: u64,
+    alignment: u64, numa: u8, name: []const u8) !void {
+    std.debug.assert(alignment>0);
+    std.debug.assert(alignment<=64);
+    std.debug.assert((alignment&(alignment-1))==0);
+    std.debug.assert(numa>=0);
+    std.debug.assert(numa<=128);
     self.stat.init(capacityBytes, name);
+    self.backingAllocator = backingAllocator;
+    self.memory = try backingAllocator.alloc(u8, capacityBytes);
+    self.offset = 0;
+    self.alignment = alignment;
+    self.numa = numa;
   }
 
-  pub fn allocator(self: *AllocatorInterface) std.mem.Allocator {
-    return std.mem.Allocator{
-      .ptr = self,
-      .vtable = &.{
-        .alloc = alloc,
-        .free = free,
-      },
-    };
+  pub fn deinit(self: *@This()) void {
+    self.backingAllocator.free(self.memory);
   }
 
-  pub fn alloc(ctx: *anyopaque, comptime T: type, n: usize) Error![]T {
-    std.debug.assert(n>0);
+  pub fn print(self: *@This()) void {
+    std.log.debug("name  (fixed)        : {s}", .{self.stat.name});
+    std.log.debug("----------------------------", .{});
+    std.log.debug("begin                : {any}", .{self.memory.ptr});
+    std.log.debug("end                  : {any}", .{self.memory.ptr+self.memory.len});
+    std.log.debug("size                 : {d}", .{self.memory.len});
+    std.log.debug("offset               : {d}", .{self.offset});
+    std.log.debug("alignment            : {d}", .{self.alignment});
+    std.log.debug("numaNode             : {d}", .{self.numa});
+  }
+
+  pub fn printStat(self: *@This()) void {
+    self.stat.print();
+  }
+
+  pub fn alloc(self: *@This(), comptime T: type, count: u64) std.mem.Allocator.Error![]T {
     std.debug.assert(@sizeOf(T)>0);
-    const self = @ptrCast(*AllocatorInterface, @alignCast(ctx));
-    const bytes = n*@sizeOf(T);`
-  }
+    std.debug.assert(count>0);
+    const bytes = @sizeOf(T)*count;
 
-  pub fn free(ctx: *anyopaque, memory: anytype) void {
-    const self = @ptrCast(*AllocatorInterface, @alignCast(ctx));
+    // Check if sufficient memory
+    if ((self.offset+bytes)>self.memory.len) {
+      std.log.debug("cannot allocate {d} bytes ({d} bytes * {d} type {s}) from '{s}' with {d} free bytes",
+        .{bytes, @sizeOf(T), count, @typeName(T), self.stat.name, self.stat.freeBytes});
+      return std.mem.Allocator.Error.OutOfMemory;
+    }
+
+    // Prepare return value
+    const ptr = self.memory.ptr+self.offset;
+    const ret = ptr[0..bytes];
+    std.debug.assert(ret.ptr==(self.memory.ptr+self.offset));
+    std.debug.assert(ret.len==bytes);
+
+    // Do book keeping
+    const paddingBytes = self.alignment - ((self.offset+bytes) & (self.alignment-1));
+    std.debug.assert(paddingBytes<self.alignment);
+    self.stat.countAlloc(bytes, paddingBytes);
+    self.offset += (bytes+paddingBytes);
+
+    std.log.debug("allocated {d} bytes ({d} bytes * {d} type {s}) from '{s}'",
+      .{bytes, @sizeOf(T), count, @typeName(T), self.stat.name});
+
+    // Return
+    return ret;
   }
 };
 
-fn createAllocatorType(comptime isDebug: bool) type {
-  if (isDebug) {
-    return struct {
-      const DebugAllocatorType = std.heap.DebugAllocator(.{
-        .stack_trace_frames = 10,
-        .enable_memory_limit = true,
-        .safety = true,
-        .thread_safe = false,
-        .verbose_log = true,
-        .backing_allocator_zeroes = false,
-        .page_size = 1024
-        });
-
-      allocator: std.mem.Allocator,
-      heapDebugAllocator: ?DebugAllocatorType = null,
-
-      pub fn init(self: *@This()) void {
-        self.heapDebugAllocator = DebugAllocatorType{.backing_allocator = std.heap.page_allocator,};
-        self.heapDebugAllocator.?.requested_memory_limit = 1024;
-        self.allocator = self.heapDebugAllocator.?.allocator();
-      }
-
-      pub fn deinit(self: *@This()) void {
-        const leakStatus = self.heapDebugAllocator.?.deinit();
-        if (leakStatus == .leak) {
-          std.debug.panic("{s}\n", .{"memory leaked"});
-        }
-      }
-    };
-  } else {
-    return struct {
-      buffer: ?[]u8,
-      allocator: std.mem.Allocator = std.heap.page_allocator,
-      fixedHeapAllocator: ?std.heap.FixedBufferAllocator = null,
-
-      pub fn init(self: *@This()) void {
-        const tmp = std.heap.page_allocator.alloc(u8, 1024);
-        if (tmp) |ptr| {
-          self.buffer = ptr;
-          self.fixedHeapAllocator = std.heap.FixedBufferAllocator.init(ptr);
-          self.allocator = self.fixedHeapAllocator.?.allocator();
-        } else |err| {
-          std.debug.panic("{any}\n", .{err});
-        }
-      }
-
-      pub fn deinit(self: *@This()) void {
-        std.heap.page_allocator.free(self.buffer.?);
-      }
-    };
+fn work(mem: *FixedSizeAllocator, n: u64) void {
+  if (mem.alloc(u8, n)) |slice| {
+    std.log.debug("got {any} {any}", .{slice.ptr, slice.len});
+  } else |err| {
+    std.log.debug("got {any}", .{err});
   }
-}
-
-fn work0(memAlloc: std.mem.Allocator) !void {
-  std.log.info("alloc-dealloc under limit\n", .{});
-  for (0..10) |i| {
-    _ = i;
-    const ptr = try memAlloc.alloc(u8, 10);
-    memAlloc.free(ptr);
-  }
-}
-
-fn work1(memAlloc: std.mem.Allocator) !void {
-  std.log.info("alloc without free under limit\n", .{});
-  for (0..10) |i| {
-    _ = i;
-    _ = try memAlloc.alloc(u8, 10);
-  }
-}
-
-fn work2(memAlloc: std.mem.Allocator) !void {
-  std.log.info("alloc over limit\n", .{});
-  _ = try memAlloc.alloc(u8, 100000);
 }
 
 pub fn main(init: std.process.Init) !void {
-  const AllocatorType = createAllocatorType(config.debugAlloc);
-  var alloc: AllocatorType = undefined;
-  alloc.init();
+  var mem: FixedSizeAllocator = undefined;
+  try mem.init(init.gpa, 1024*16, 8, 0, "bubba");
+  mem.print();
 
-  const args = try init.minimal.args.toSlice(init.arena.allocator());
-  for (args) |arg| {
-    if (std.mem.eql(u8, "-work0", arg)) {
-      try work0(alloc.allocator);
-    } else if (std.mem.eql(u8, "-work1", arg)) {
-      try work1(alloc.allocator);
-    } else if (std.mem.eql(u8, "-work2", arg)) {
-      try work2(alloc.allocator);
-    } else {
-      std.log.warn("no match\n", .{});
-    }
-  }
+  work(&mem, 1);
+  work(&mem, 1);
+  work(&mem, 4);
+  work(&mem, 3);
 
-  alloc.deinit();
+  mem.printStat();
+  mem.deinit();
 }
