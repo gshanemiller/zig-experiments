@@ -2,16 +2,16 @@ const X still allows mutating calls on X
 bs1 wierdness of printing types
 DebugAllocator should point out returns type
 not getX/setX   -> X/setX
-too much BS on allocator. why create and alloc?
+too much nonsense on allocator. why create and alloc?
 need examples of conditionally defined structs for comptime
 error: missing struct field: debugAllocator   should say debugAllocator not initialized.
 shouldn't const exeOptions = b.addOptions() and  const buildOptions = .{ .log = b.option(...)} be the same thing?
-wtf does Default initialization of this struct is deprecated; use .init instead mean?
-wtf does var fixedMemAllocator: std.heap.FixedBufferAllocator = .init(buffer); mean? .init on what?
+huh? does Default initialization of this struct is deprecated; use .init instead mean?
+huh? does var fixedMemAllocator: std.heap.FixedBufferAllocator = .init(buffer); mean? .init on what?
 
 how in the f do you make https://ziglang.org/documentation/0.16.0/std/#std.heap.FixedBufferAllocator which takes two fields but also needs init
    when the field in q is declared in a struct?
 
-wtf is std.heap.DebugAllocator return a type? it takes two steps to get to end-point
+huh? is std.heap.DebugAllocator return a type? it takes two steps to get to end-point
 
-wtf a struct must have fields to have functions?
+huh? a struct must have fields to have functions?
