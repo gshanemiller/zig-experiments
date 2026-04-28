@@ -50,6 +50,37 @@ const AllocatorStats = struct {
   }
 };
 
+const AllocatorInterface = struct {
+  stat: AllocatorStats,
+  parent: std.mem.Allocator,
+
+  pub fn init(self: AllocatorInterface, parent: std.memAllocator, capacityBytes: u64, name: []const u8) void {
+    self.parent = parent;
+    self.stat.init(capacityBytes, name);
+  }
+
+  pub fn allocator(self: *AllocatorInterface) std.mem.Allocator {
+    return std.mem.Allocator{
+      .ptr = self,
+      .vtable = &.{
+        .alloc = alloc,
+        .free = free,
+      },
+    };
+  }
+
+  pub fn alloc(ctx: *anyopaque, comptime T: type, n: usize) Error![]T {
+    std.debug.assert(n>0);
+    std.debug.assert(@sizeOf(T)>0);
+    const self = @ptrCast(*AllocatorInterface, @alignCast(ctx));
+    const bytes = n*@sizeOf(T);`
+  }
+
+  pub fn free(ctx: *anyopaque, memory: anytype) void {
+    const self = @ptrCast(*AllocatorInterface, @alignCast(ctx));
+  }
+};
+
 fn createAllocatorType(comptime isDebug: bool) type {
   if (isDebug) {
     return struct {
