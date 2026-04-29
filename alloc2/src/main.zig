@@ -12,38 +12,43 @@ const AllocatorStats = struct {
   name: []const u8,
 
   fn invariant(self: AllocatorStats) bool {
-    return (self.capacityBytes
+    return (self.capacityBytes==(self.freeBytes+self.totalPaddingBytes+self.totalAllocatedBytes));
   }
 
   pub fn init(self: *@This(), capacityBytes: u64, name: []const u8) void {
-    std.debug.assert(capacityBytes>0);
-    std.debug.assert((capacityBytes%1024)==0);
-    std.debug.assert(name.len>0);
     self.capacityBytes = capacityBytes;
-    self.freeBytes = capacityBytes;
-    self.freeCount = 0;
-    self.allocCount = 0;
-    self.totalFreeBytes = 0;
-    self.totalAllocatedBytes = 0;
-    self.totalPaddingBytes = 0;
+    self.reset();
     self.name = name;
-    // std.debug.assert(self.invariant());
+    std.debug.assert(self.invariant());
   }
 
   pub fn countAlloc(self: *@This(), bytes: u64, paddingBytes: u64) void {
     std.debug.assert(bytes>0);
     self.freeBytes -= (bytes+paddingBytes);
-    // std.debug.assert(self.invariant());
     self.totalPaddingBytes += paddingBytes;
     self.allocCount += 1;
     self.totalAllocatedBytes += (bytes);
+    std.debug.assert(self.invariant());
   }
 
   pub fn countFree(self: *@This(), bytes: u64) void {
     std.debug.assert(bytes>0);
-    // std.debug.assert(self.invariant());
     self.freeCount += 1;
     self.totalFreeBytes += bytes;
+    std.debug.assert(self.invariant());
+  }
+
+  pub fn reset(self: *@This()) void {
+    std.debug.assert(self.capacityBytes>0);
+    std.debug.assert((self.capacityBytes%1024)==0);
+    std.debug.assert(self.name.len>0);
+    self.freeBytes = self.capacityBytes;
+    self.freeCount = 0;
+    self.allocCount = 0;
+    self.totalFreeBytes = 0;
+    self.totalAllocatedBytes = 0;
+    self.totalPaddingBytes = 0;
+    std.debug.assert(self.invariant());
   }
 
   pub fn print(self: *@This()) void {
@@ -67,6 +72,10 @@ const FixedSizeAllocator = struct {
   numa: u8,
   stat: AllocatorStats,
   backingAllocator: std.mem.Allocator,
+  
+  fn invariant(self: *@This()) bool {
+    return self.offset<=self.memory.len;
+  }
   
   pub fn init(self: *@This(), backingAllocator: std.mem.Allocator, capacityBytes: u64,
     alignment: u64, numa: u8, name: []const u8) !void {
@@ -138,13 +147,20 @@ const FixedSizeAllocator = struct {
       .{slice.ptr, slice.len,  @typeName(T), self.stat.name});
     self.stat.countFree(slice.len);
   }
+
+  pub fn reset(self: *@This(), alignment: u64) void {
+    std.debug.assert(alignment>0);
+    std.debug.assert(alignment<=64);
+    std.debug.assert((alignment&(alignment-1))==0);
+    self.offset = 0;
+    self.stat.reset();
+    self.alignment = alignment;
+  }
 };
 
 fn work(mem: *FixedSizeAllocator, n: u64) void {
   if (mem.alloc(u8, n)) |slice| {
-    mem.printStat();
     mem.free(u8, slice);
-    mem.printStat();
   } else |err| {
     std.log.debug("error: {any}", .{err});
   }
@@ -155,13 +171,14 @@ pub fn main(init: std.process.Init) !void {
   try mem.init(init.gpa, 1024*16, 8, 0, "bubba");
 
   work(&mem, 1);
-  // work(&mem, 1);
-  // work(&mem, 4);
-  // work(&mem, 3);
-  // work(&mem, 8);
-  // work(&mem, 10);
-  // work(&mem, 17);
-  // work(&mem, 32);
+  work(&mem, 1);
+  work(&mem, 4);
+  work(&mem, 3);
+  work(&mem, 8);
+  work(&mem, 10);
+  work(&mem, 17);
+  work(&mem, 32);
 
+  mem.printStat();
   mem.deinit();
 }
