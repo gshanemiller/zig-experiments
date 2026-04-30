@@ -3,8 +3,9 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
   const target = b.standardTargetOptions(.{});
   const optimize = b.standardOptimizeOption(.{});
-  const includeDir = std.Build.LazyPath{.cwd_relative = "/usr/include"};
-  const libDir = std.Build.LazyPath{.cwd_relative = "/usr/lib/x86_64-linux-gnu"};
+
+  // const includeDir = std.Build.LazyPath{.cwd_relative = "/usr/include"};
+  // const libDir = std.Build.LazyPath{.cwd_relative = "/usr/lib/x86_64-linux-gnu"};
 
   const numa_c = b.addTranslateC(.{
     .root_source_file = b.path("numa.h"),
@@ -12,9 +13,10 @@ pub fn build(b: *std.Build) void {
     .optimize = optimize,
   });
 
-  numa_c.addIncludePath(includeDir);
-  numa_c.addFrameworkPath(libDir);
-  numa_c.addSystemFrameworkPath(libDir);
+  // numa_c.addIncludePath(includeDir);
+  // numa_c.addFrameworkPath(libDir);
+  // numa_c.addSystemFrameworkPath(libDir);
+
   numa_c.linkSystemLibrary("numa", .{});                                
 
   const mod = b.addModule("ccode", .{
