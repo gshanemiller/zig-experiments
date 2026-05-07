@@ -7,7 +7,7 @@ pub fn main() !void {
   const vlanId: u16 = 2331;
   const mac: [6]u8 = .{10,11,12,13,14,1};
 
-  var foo: [256]u8 = undefined;
+  var foo: [62]u8 = undefined;
 
   const junk = try std.fmt.bufPrint(&foo, "ether={x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} ipv4:{d:0>3}.{d:0>3}.{d:0>3}.{d:0>3}:{d:0>5} vlanId={d:0>4}", .{
       mac[0],
@@ -28,9 +28,4 @@ pub fn main() !void {
   std.debug.print("{s}\n", .{junk});
   std.debug.print("{d}\n", .{foo.len});
   std.debug.print("{d}\n", .{junk.len});
-  std.debug.print("{d}\n", .{addr & 0xff});
-  std.debug.print("{d}\n", .{(addr>>8) & 0xff});
-  std.debug.print("{d}\n", .{(addr>>16) & 0xff});
-  std.debug.print("{d}\n", .{(addr>>24) & 0xff});
-  std.debug.print("{d:0<3}\n", .{(addr>>8) & 0xff});
 }
