@@ -1,4 +1,5 @@
 const std = @import("std");
+const config = @import("config");
 
 pub const Log = struct {
   // Log levels
@@ -12,123 +13,68 @@ pub const Log = struct {
     TRACE,
   };
 
-  pub fn createType(comptime compTimeLevel: Level, comptime compTimeStats: bool) type {
-    if (compTimeLevel==Level.OFF) {
-      return struct {
-        /// Log mesage then panic
-        pub fn fatal(comptime format: []const u8, args: anytype) void {
-          std.debug.panic(format, args);
-        }
+  stats: bool = config.stats,
+  logLevel: Level = @as(Level, @enumFromInt(@intFromEnum(config.logLevel))),
 
-        /// Log error
-        pub fn err(comptime format: []const u8, args: anytype) void {
-          std.debug.print("error: ", .{});
-          std.debug.print(format, args);
-        }
+  /// Log specified 'format, args' then panic
+  pub fn fatal(self: Log, comptime format: []const u8, args: anytype) void {
+    _ = self;
+    std.debug.panic(format, args);
+  }
 
-        /// Log warning
-        pub fn warn(comptime format: []const u8, args: anytype) void {
-          std.debug.print("warn : ", .{});
-          std.debug.print(format, args);
-        }
-
-        /// NOP: this call should be compiled out of any .obj files
-        pub fn info(comptime format: []const u8, args: anytype) void {
-          _ = format;
-          _ = args;
-        }
-
-        /// NOP: this call should be compiled out of any .obj files
-        pub fn debug(comptime format: []const u8, args: anytype) void {
-          _ = format;
-          _ = args;
-        }
-
-        /// NOP: this call should be compiled out of any .obj files
-        pub fn trace(comptime format: []const u8, args: anytype) void {
-          _ = format;
-          _ = args;
-        }
-
-        pub fn stat(comptime format: []const u8, args: anytype) void {
-          _ = format;
-          _ = args;
-        }
-
-        pub fn level() Level {
-          return Level.OFF;
-        }
-
-        pub fn statsEnabled() bool {
-          return false;
-        }
-      };
-    } else {
-      return struct {
-        logLevel: Level = compTimeLevel,
-        stats: bool = compTimeStats,
-
-        /// Log specified 'format, args' then panic
-        pub fn fatal(comptime format: []const u8, args: anytype) void {
-          std.debug.panic(format, args);
-        }
-
-        /// Log specified 'format, args' provided 'level>=ERROR' else do nothing
-        pub fn err(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.level>=Level.ERROR) {
-            std.debug.print("error: ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        /// Log specified 'format, args' provided 'level>=WARN' else do nothing
-        pub fn warn(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.level>=Level.WARN) {
-            std.debug.write("warn:  ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        /// Log specified 'format, args' provided 'level>=INFO' else do nothing
-        pub fn info(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.level>=Level.INFO) {
-            std.debug.write("info:  ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        /// Log specified 'format, args' provided 'level>=DEBUG' else do nothing
-        pub fn debug(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.level>=Level.DEBUG) {
-            std.debug.write("debug: ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        /// Log specified 'format, args' provided 'level=TRACE' else do nothing
-        pub fn trace(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.level>=Level.TRACE) {
-            std.debug.write("trace: ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        /// Log specified 'format, args' provided 'logLevel.stats==true' else do nothing
-        pub fn stat(self: *@This(), comptime format: []const u8, args: anytype) void {
-          if (self.stats) {
-            std.debug.write("stats: ", .{});
-            std.debug.print(format, args);
-          }
-        }
-
-        pub fn level(self: *@This()) Level {
-          return self.logLevel;
-        }
-
-        pub fn statsEnabled(self: *@This()) bool {
-          return self.stats;
-        }
-      };
+  /// Log specified 'format, args' provided 'level>=ERROR' else do nothing
+  pub fn err(self: Log, comptime format: []const u8, args: anytype) void {
+    if (@intFromEnum(self.logLevel)>=@intFromEnum(Level.ERROR)) {
+      std.debug.print("error: ", .{});
+      std.debug.print(format, args);
     }
+  }
+
+  /// Log specified 'format, args' provided 'level>=WARN' else do nothing
+  pub fn warn(self: Log, comptime format: []const u8, args: anytype) void {
+    if (@intFromEnum(self.logLevel)>=@intFromEnum(Level.WARN)) {
+      std.debug.print("warn:  ", .{});
+      std.debug.print(format, args);
+    }
+  }
+
+  /// Log specified 'format, args' provided 'level>=INFO' else do nothing
+  pub fn info(self: Log, comptime format: []const u8, args: anytype) void {
+    if (@intFromEnum(self.logLevel)>=@intFromEnum(Level.INFO)) {
+      std.debug.print("info:  ", .{});
+      std.debug.print(format, args);
+    }
+  }
+
+  /// Log specified 'format, args' provided 'level>=DEBUG' else do nothing
+  pub fn debug(self: Log, comptime format: []const u8, args: anytype) void {
+    if (@intFromEnum(self.logLevel)>=@intFromEnum(Level.DEBUG)) {
+      std.debug.print("debug: ", .{});
+      std.debug.print(format, args);
+    }
+  }
+
+  /// Log specified 'format, args' provided 'level=TRACE' else do nothing
+  pub fn trace(self: Log, comptime format: []const u8, args: anytype) void {
+    if (@intFromEnum(self.logLevel)==@intFromEnum(Level.TRACE)) {
+      std.debug.print("trace: ", .{});
+      std.debug.print(format, args);
+    }
+  }
+
+  /// Log specified 'format, args' provided 'logLevel.stats==true' else do nothing
+  pub fn stat(self: Log, comptime format: []const u8, args: anytype) void {
+    if (self.stats) {
+      std.debug.print("stats: ", .{});
+      std.debug.print(format, args);
+    }
+  }
+
+  pub fn level(self: Log) Level {
+    return self.logLevel;
+  }
+
+  pub fn statsEnabled(self: Log) bool {
+    return self.stats;
   }
 };

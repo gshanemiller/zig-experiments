@@ -1,4 +1,5 @@
 const std = @import("std");
+const LogLevel = @import("src/log.zig").Log.Level;
 
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
@@ -20,6 +21,19 @@ pub fn build(b: *std.Build) void {
     // of this build script using `b.option()`. All defined flags (including
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
+
+    const buildOptions = .{
+      .logLevel  = b.option(
+        LogLevel,                                                                                                         
+        "logLevel",                                                                                                       
+        "logging level default 'WARN'",                                                                                    
+      ) orelse LogLevel.WARN,                                                                                              
+      .stats = b.option(                                                                                                  
+        bool,                                                                                                             
+        "statsEnabled",                                                                                                   
+        "set true to enable statistics default 'false'",                                                                  
+      ) orelse false
+    };
 
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
@@ -82,6 +96,11 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+
+    const testOptions = b.addOptions();
+    testOptions.addOption(LogLevel, "logLevel", buildOptions.logLevel);                                                   
+    testOptions.addOption(bool, "stats", buildOptions.stats);                                                             
+    mod.addOptions("config", testOptions);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
