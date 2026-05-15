@@ -40,6 +40,14 @@ const Test = struct {
   f2: []const u8,
 };
 
+pub fn addTest(a: std.mem.Allocator, m: *std.hash_map.StringHashMap(*Test)) !void {
+  var t1 = try a.create(Test);
+  t1.f1 = 999;
+  t1.f2 = "xxy";
+  std.debug.print("made {any}\n", .{t1});
+  try m.put("t2", t1);
+}
+
 pub fn main() !void {
   const MyAllocType = DefaultAllocator.createType(true, 5);
   var myAlloc: MyAllocType = undefined;
@@ -54,6 +62,8 @@ pub fn main() !void {
   std.debug.print("made {any}\n", .{t1});
   try map.put("t1", t1);
 
+  try addTest(allocator, &map);
+
   var iter = map.iterator();
   while (iter.next()) |obj| {
     std.debug.print("iter key='{}' value='{any}' value='{any}'\n", .{obj.key_ptr, obj.value_ptr, obj.value_ptr.*});
@@ -64,7 +74,7 @@ pub fn main() !void {
     moreWork = false;
     var diter = map.iterator();
     while (diter.next()) |obj| {
-      std.debug.print("iter key='{}' value='{any}' value='{any}'\n", .{obj.key_ptr, obj.value_ptr, obj.value_ptr.*});
+      std.debug.print("diter key='{}' value='{any}' value='{any}'\n", .{obj.key_ptr, obj.value_ptr, obj.value_ptr.*});
       allocator.destroy(obj.value_ptr.*);
       if (map.remove(obj.key_ptr.*)) {
         moreWork = true;
