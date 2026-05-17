@@ -69,6 +69,11 @@ pub fn main() !void {
     std.debug.print("iter key='{}' value='{any}' value='{any}'\n", .{obj.key_ptr, obj.value_ptr, obj.value_ptr.*});
   }
 
+  var kiter = map.keyIterator();
+  while (kiter.next()) |key| {
+    std.debug.print("iter key='{s}'\n", .{key.*});
+  }
+
   var moreWork = true;
   while (moreWork) {
     moreWork = false;
