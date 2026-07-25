@@ -1,2 +1,2 @@
 const std = @import("std");
-pub const c = @import("binding_c");
+pub const bind_c = @import("binding_c");
