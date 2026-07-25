@@ -1,5 +1,23 @@
-#include <json.hpp>
+#include <simdjson.h>
+#include <stringzilla.h>
 #include <json_binding.h>
+#include <assert.h>
+
+class JSONDocument {
+  // data
+  simdjson::ondemand::document doc;
+  simdjson::ondemand::parser parser;
+  std::string_view stringValue;
+public:
+  // CREATORS
+  JSONDocument() = default;
+  ~JSONDocument() = default; 
+public:
+  // MANIPULATORS
+  int reset(const char *data, const size_t dataSize);
+  int findStringValue(const char *key, const size_t keySize);
+  int findNestedStringValue(int keyCount, const char *key, const size_t *keySize);
+};
 
 int JSONDocument::reset(const char *data, const size_t dataSize) {
   assert(data);
@@ -57,6 +75,14 @@ int infinitech_stripJsonWhiteSpace(const char *data, const size_t dataSize, char
     return 0;
   }
   return -1;
+}
+
+const char *infinitech_strstr(const char *data, const size_t dataSize, const char *key, const size_t keySize) {
+  assert(data);
+  assert(dataSize);
+  assert(key);
+  assert(keySize);
+  return sz_find(data, dataSize, key, keySize);
 }
 
 };
