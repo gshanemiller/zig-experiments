@@ -1,24 +1,11 @@
 const std = @import("std");
 
-// Although this function looks imperative, it does not perform the build
-// directly and instead it mutates the build graph (`b`) that will be then
-// executed by an external runner. The functions in `std.Build` implement a DSL
-// for defining build steps and express dependencies between them, allowing the
-// build runner to parallelize the build automatically (and the cache system to
-// know when a step doesn't need to be re-run).
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const binding_c = b.addTranslateC(.{
-      .root_source_file = b.path("ext/json/json_binding.h"),
-      .target = target,
-      .optimize = optimize,
-    });
-    binding_c.addIncludePath(b.path("ext/json"));
+fn addExecutable(b: *std.Build, disableAssert: bool, optimize: std.builtin.OptimizeMode, 
+  target: std.Build.ResolvedTarget, binding_c: *std.Build.Step.TranslateC,
+  libName: []const u8, exeName: []const u8) !void {
 
     const libsimdjson = b.addLibrary(.{
-        .name = "simdjson",
+        .name = libName,
         .linkage = .static,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/simdjson.zig"),
@@ -36,9 +23,14 @@ pub fn build(b: *std.Build) void {
         .flags = &.{""},
         .language = std.Build.Module.CSourceLanguage.cpp,
     });
+
     libsimdjson.root_module.addIncludePath(b.path("ext/json"));
     libsimdjson.root_module.addIncludePath(b.path("ext/json/simdjson"));
     libsimdjson.root_module.addIncludePath(b.path("ext/json/stringzilla"));
+
+    if (disableAssert) {
+      libsimdjson.root_module.addCMacro("NDEBUG", "1");
+    }
     libsimdjson.root_module.addCMacro("SIMDJSON_AVX512_ALLOWED", "0");
     libsimdjson.root_module.addCMacro("SIMDJSON_IMPLEMENTATION_HASWELL", "1");
     libsimdjson.root_module.addCMacro("SIMDJSON_EXCEPTIONS", "0");
@@ -51,7 +43,7 @@ pub fn build(b: *std.Build) void {
     libsimdjson.root_module.link_libcpp = true;
 
     const exe = b.addExecutable(.{                                                                                      
-        .name = "main",                                                                                                  
+        .name = exeName,
         .root_module = b.createModule(.{                                                                                
             .root_source_file = b.path("src/main.zig"),
             .target = target,                                                                                           
@@ -63,4 +55,25 @@ pub fn build(b: *std.Build) void {
     }); 
    exe.root_module.linkLibrary(libsimdjson);
    b.installArtifact(exe);
+}
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const binding_c = b.addTranslateC(.{
+      .root_source_file = b.path("ext/json/json_binding.h"),
+      .target = target,
+      .optimize = optimize,
+    });
+    binding_c.addIncludePath(b.path("ext/json"));
+
+    try addExecutable(b, false, std.builtin.OptimizeMode.Debug, target, binding_c,
+      "libsimdjson.debug", "main.debug");
+    try addExecutable(b, false, std.builtin.OptimizeMode.ReleaseSafe, target, binding_c,
+      "libsimdjson.release_safe", "main.release_safe");
+    try addExecutable(b, true, std.builtin.OptimizeMode.ReleaseFast, target, binding_c,
+      "libsimdjson.release_fast", "main.release_fast");
+    try addExecutable(b, true, std.builtin.OptimizeMode.ReleaseSmall, target, binding_c,
+      "libsimdjson.release_small", "main.release_small");
 }
