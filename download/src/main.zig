@@ -1,42 +1,57 @@
 const std = @import("std");
 
 pub fn main(init: std.process.Init) !void {
-    const allocator = init.arena.allocator();
+    const gpa = init.gpa;
+    const io = init.io;
+
     var client: std.http.Client = .{
-        .io = init.io,
-        .allocator = allocator,
+        .allocator = gpa,
+        .io = io,
     };
     defer client.deinit();
 
-    // const url = "https://leidata-preview.gleif.org/storage/golden-copy-files/2026/06/23/1242737/20260623-1600-gleif-goldencopy-lei2-golden-copy.json.zip";
-    const url = "https://example.com";
-    
-    // Allocate buffer for redirect tracking
-    var redirect_buffer: [4096]u8 = undefined;
-    
-    // Use allocating writer to capture the downloaded payload
-    var body_writer: std.Io.Writer.Allocating = .init(allocator);
-    defer body_writer.deinit();
+    const uri = try std.Uri.parse("https://github.com/temporalio/cli/releases/download/v1.8.1/temporal_cli_1.8.1_windows_arm64.zip");
+    var req = try client.request(.GET, uri, .{});
+    defer req.deinit();
 
-    std.debug.print("Downloading from {s}...\n", .{url});
+    try req.sendBodiless();
 
-    _ = try client.fetch(.{
-        .location = .{ .url = url },
-        .method = .GET,
-        .redirect_buffer = &redirect_buffer,
-        .response_writer = &body_writer.writer,
-    });
+    var bufHdr: [2048]u8 = undefined;
+    var response = try req.receiveHead(&bufHdr);
 
-    const downloaded_data = body_writer.written();
+    if (response.head.status != .ok) {
+        std.debug.print("Failed: status {s}\n", .{response.head.status.phrase() orelse "unknown"});
+        return;
+    }
 
-    // Save data to a local file
-    var file = try std.Io.Dir.createFileAbsolute(init.io, "/tmp/test.txt", .{});
-    defer file.close(init.io);
-    
-    var write_buf: [8 * 1024]u8 = undefined;
-    var file_writer = file.writer(init.io, &write_buf);
-    try file_writer.interface.writeAll(downloaded_data);
+    var shaBuf: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;                                                
+    var hasher: std.crypto.hash.sha2.Sha256 = .init(.{});
 
-    std.debug.print("Download complete! Saved {d} bytes.\n", .{downloaded_data.len});
+    var total: usize = 0;
+    var dataHdr: [16384]u8 = undefined;
+    var reader = response.reader(&dataHdr);
+
+    while (true) {
+        if (reader.peek(dataHdr.len)) |data| { 
+          total = total + data.len;
+          hasher.update(data); 
+          reader.toss(data.len);
+          // std.debug.print("data {x}\n", .{data});
+          std.debug.print("total {}\n", .{total});
+        } else |err| {
+          std.debug.print("peek {} end {} seek {}\n", .{err, reader.end, reader.seek});
+          break;
+        }
+    }
+  
+    if (reader.end>0) {
+      total = total + reader.end;
+      hasher.update(reader.buffer[0..reader.end]); 
+    }
+
+    hasher.final(&shaBuf);
+
+    std.debug.print("end total {} end {} seek {}\n", .{total, reader.end, reader.seek});
+    std.debug.print("SHA-256: {s}\n", .{std.fmt.bytesToHex(shaBuf, .lower)});                                             
 }
 
