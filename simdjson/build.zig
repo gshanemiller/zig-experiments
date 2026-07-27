@@ -35,10 +35,7 @@ fn addExecutable(b: *std.Build, disableAssert: bool, optimize: std.builtin.Optim
     libsimdjson.root_module.addCMacro("SIMDJSON_IMPLEMENTATION_HASWELL", "1");
     libsimdjson.root_module.addCMacro("SIMDJSON_EXCEPTIONS", "0");
     libsimdjson.root_module.addCMacro("SIMDJSON_THREADS_ENABLED", "0");
-    libsimdjson.root_module.addCMacro("SIMDJSON_THREADS_ENABLED", "0");
     libsimdjson.root_module.addCMacro("SZ_USE_HASWELL", "1");
-    libsimdjson.root_module.addCMacro("SZ_AVOID_LIBC", "0");
-    libsimdjson.root_module.addCMacro("SZ_AVOID_LIBC", "0");
     libsimdjson.root_module.addCMacro("SZ_AVOID_LIBC", "0");
     libsimdjson.root_module.link_libcpp = true;
 
