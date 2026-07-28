@@ -1,0 +1,76 @@
+const X still allows mutating calls on X
+bs1 wierdness of printing types
+DebugAllocator should point out returns type
+not getX/setX   -> X/setX
+too much nonsense on allocator. why create and alloc?
+need examples of conditionally defined structs for comptime
+error: missing struct field: debugAllocator   should say debugAllocator not initialized.
+shouldn't const exeOptions = b.addOptions() and  const buildOptions = .{ .log = b.option(...)} be the same thing?
+huh? does Default initialization of this struct is deprecated; use .init instead mean?
+huh? does var fixedMemAllocator: std.heap.FixedBufferAllocator = .init(buffer); mean? .init on what?
+
+how in the f do you make https://ziglang.org/documentation/0.16.0/std/#std.heap.FixedBufferAllocator which takes two fields but also needs init
+   when the field in q is declared in a struct?
+
+huh? is std.heap.DebugAllocator return a type? it takes two steps to get to end-point
+
+huh? a struct must have fields to have functions?
+
+
+
+git rev-parse --verify HEAD
+date -u
+/home/smiller53/Dev/zig-x86_64-linux-0.16.0/zig build-lib -ofmt=elf -ODebug -target x86_64-linux-gnu -mcpu x86_64_v3+avx -Mroot=/home/smiller53/Dev/transport/src/lib/root.zig --cache-dir .zig-cache --global-cache-dir /home/smiller53/.cache/zig --name transport -static --zig-lib-dir /home/smiller53/Dev/zig-x86_64-linux-0.16.0/lib/ --listen=-
+pkg-config --list-all
+pkg-config numa --cflags --libs
+/home/smiller53/Dev/zig-x86_64-linux-0.16.0/zig translate-c -lc --cache-dir .zig-cache --global-cache-dir /home/smiller53/.cache/zig -target x86_64-linux-gnu -search_paths_first_static -lnuma /home/smiller53/Dev/transport/src/lib/c/header.h --listen=-
+
+
+vs omitting -target x86_64-linux-gnu which works
+https://codeberg.org/ziglang/zig/issues/32133
+--------------------
+
+
+
+An error occurred:
+/tmp/playground2717735022/play.zig:12:12: error: extern structs cannot contain fields of type 'u3'
+      pcp: u3 align(1) = 0,
+           ^~
+/tmp/playground2717735022/play.zig:12:12: note: only integers with 0 or power of two bits are extern compatible
+referenced by:
+
+---------------------------------
+
+struct data x prevents method called x() which also prevents function args called x
+
+need to convert from options enum to real enum, and real enum type mentioned in build.zig
+
+
+dealing with !void is confusing. returns nothing except error. how to handle?
+
+fucking left shift pain in the ass
+
+
+const OptimizeModeMax: usize = @intCast(@intFromEnum(std.builtin.OptimizeMode.ReleaseSmall))+1;
+build.zig:7:28: note: use @as to provide explicit result type
+build.zig:8:32: error: @intCast must have a known result type
+
+build.zig:7:28: error: expected 2 arguments, found 1
+const LogLevelMax: usize = @as(@intFromEnum(std.log.Level.debug))+1;
+
+
+
+buildOptions
+    .logLevel  = b.option(                                                                                              
+      LogLevel,                                                                                                         
+      "logLevel",                                                                                                       
+      "logging level default 'WARN'",                                                                                   
+    ) orelse LogLevel.WARN,                                                                                             
+  }; 
+build.zig:226:74: error: expected type 'log.Level', found 'src.lib.log.log.Log.Level'
+    externLib[i] = try addExternalLib(b, disableAssert, opt, buildOptions.logLevel,
+wtf is src.lib.log?
+// nm
+const LogLevel = @import("src/lib/log/log.zig").Log.Level;                                                              
+
+
