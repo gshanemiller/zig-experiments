@@ -74,3 +74,68 @@ wtf is src.lib.log?
 const LogLevel = @import("src/lib/log/log.zig").Log.Level;                                                              
 
 
+smiller53@smiller53-MacBookPro:~/Dev/infinitech$ zb unitTest
+unitTest
+└─ run test w
+error: test-error
+warn : test-warn
+error: test-fmt-error 1
+warn : test-fmt-warn 2
+failed command: ./.zig-cache/o/f4cda21c8404514539d0ae995778271e/test --cache-dir=./.zig-cache --seed=0xaa30520a --listen=-
+what failed?
+
+
+
+
+int infinitech_stripJsonWhiteSpace(const char *data, const size_t dataSize, char *output, size_t *outputSize) {         
+  assert(data);                                                                                                         
+  assert(dataSize);                                                                                                     
+  assert(output);                                                                                                       
+  assert(outputSize);                                                                                                   
+  assert(*outputLen>=dataSize); <---- wtf assert on undefined var b/c asserts disabled!?
+  std::size_t outputLen = *outputSize; 
+
+
+
+smiller53@smiller53-MacBookPro:~/Dev/infinitech$ zb unitTest.debug
+[4/6] steps
+[4/6] steps
+[4/6] steps
+[4/6] steps
+[4/6] steps
+^C/6] steps
+smiller53@smiller53-MacBookPro:~/Dev/infinitech$ 
+   └─ lib.ext.io.test.openForRead           hang but not if run exe self
+
+
+
+how in the ##%$% do you build ONE target? not build and run ('cause of hang) just build it and install.
+
+
+zig build <test-run> eats stdout - why?
+
+# huh?
+src/lib/mem/bumpallocator_debug.zig:134:75: error: expected type 'c_int', found 'bool'
+      c.infinitech_logDebug("isNumaMemory         : %d\n", @as(c_int, self.numa));
+ 
+
+zig clang lib does not have mbind or numa calls
+
+
+wtf is this doing in std.mem.allocator?
+pub fn noAlloc( self: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize, ) ?[*]u8
+pub fn noFree( self: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize, ) void
+pub fn noRemap( self: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize, ) ?[*]u8
+pub fn noResize( self: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize, ) bool
+
+pub fn noFree(
+    self: *anyopaque,
+    memory: []u8,
+    alignment: Alignment,
+    ret_addr: usize,
+) void {
+    _ = self;
+    _ = memory;
+    _ = alignment;
+    _ = ret_addr;
+}
