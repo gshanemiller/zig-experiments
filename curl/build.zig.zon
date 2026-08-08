@@ -1,0 +1,12 @@
+.{
+    .name = .infinitech,
+    .version = "0.0.1",
+    .fingerprint = 0x535729e8b5035d12,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
