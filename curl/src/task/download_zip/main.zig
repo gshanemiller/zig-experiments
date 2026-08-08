@@ -1,6 +1,19 @@
 const std = @import("std");
 const task = @import("download_zip");
 
+// To make curl's data writer function callback work with ZIG while avoiding curl's
+// void* for // 'rawData', and user context 'rawContext' arguments --- which are fine
+// in and of themselves, but they hit into ZIG's pickiness about treating C void* 
+// like ?*anyopaque which I could make work --- I specified u64 which occupies as
+// much space on the stack as a pointer. Then I cast to what I need for ZIG. And,
+// indeed, C-code would do casts granted in a less opaque way.
+
+// Using CURL instead of std.http.Client, which I tried first, is a work around
+// for some ZIG library wierdness. http.Client downloads the first URL as expected.
+// However, for reasons I cannot work out, the second URL (golden-copy.json.zip)
+// does not. The first 100 bytes are just completely wrong (likely all bytes 
+// wrong). Maybe encoding/blocking or something else? CURL however works for both
+// delivering bytes as expected when compared to running CURL or wget in bash.
 export fn curlCallback(rawData: usize, size: u64, nmemb: u64, rawContext: usize) callconv(.c) u64 {
   std.debug.assert(rawData!=0);
   std.debug.assert(size==1);
